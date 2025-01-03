@@ -33,3 +33,5 @@
 
 /.vscode
 **/build
+/eigen3
+/opencv
