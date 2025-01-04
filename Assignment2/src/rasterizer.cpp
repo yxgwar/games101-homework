@@ -43,6 +43,45 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
 static bool insideTriangle(int x, int y, const Vector3f* _v)
 {   
     // TODO : Implement this function to check if the point (x, y) is inside the triangle represented by _v[0], _v[1], _v[2]
+    Vector3f p(x + 0.5f, y + 0.5f, 1.0f);
+
+    Vector3f p01 = _v[1] - _v[0];
+    Vector3f p12 = _v[2] - _v[1];
+    Vector3f p20 = _v[0] - _v[2];
+
+    Vector3f p0 = p - _v[0];
+    Vector3f p1 = p - _v[1];
+    Vector3f p2 = p - _v[2];
+
+    float z1 = p01.x() * p0.y() - p01.y() * p0.x();
+    float z2 = p12.x() * p1.y() - p12.y() * p1.x();
+    float z3 = p20.x() * p2.y() - p20.y() * p2.x();
+
+    if(z1 * z2 > 0 && z2 * z3 > 0)
+        return true;
+    else return false;
+}
+
+static bool insideTriangle(float x, float y, const Vector3f* _v)
+{   
+    // TODO : Implement this function to check if the point (x, y) is inside the triangle represented by _v[0], _v[1], _v[2]
+    Vector3f p(x, y, 1.0f);
+
+    Vector3f p01 = _v[1] - _v[0];
+    Vector3f p12 = _v[2] - _v[1];
+    Vector3f p20 = _v[0] - _v[2];
+
+    Vector3f p0 = p - _v[0];
+    Vector3f p1 = p - _v[1];
+    Vector3f p2 = p - _v[2];
+
+    float z1 = p01.x() * p0.y() - p01.y() * p0.x();
+    float z2 = p12.x() * p1.y() - p12.y() * p1.x();
+    float z3 = p20.x() * p2.y() - p20.y() * p2.x();
+
+    if(z1 * z2 > 0 && z2 * z3 > 0)
+        return true;
+    else return false;
 }
 
 static std::tuple<float, float, float> computeBarycentric2D(float x, float y, const Vector3f* v)
@@ -106,6 +145,62 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
 void rst::rasterizer::rasterize_triangle(const Triangle& t) {
     auto v = t.toVector4();
     
+    int x1 = width, y1 = height;
+    int x2 = 0, y2 = 0;
+    for(auto& ver: v)
+    {
+        if(ver[0] < x1) x1 = ver[0];
+        if(ver[0] > x2) x2 = ver[0];
+        if(ver[1] < y1) y1 = ver[1];
+        if(ver[1] > y2) y2 = ver[1];
+    }
+
+    for(int i = x1; i <= x2; i++)
+    {
+        for(int j = y1; j <= y2; j++)
+        {
+            int index = get_index(i, j);
+#ifndef SS
+            if(insideTriangle(i, j, t.v))
+            {
+                auto[alpha, beta, gamma] = computeBarycentric2D(i + 0.5f, j + 0.5f, t.v);
+                float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                z_interpolated *= w_reciprocal;
+                if(z_interpolated < depth_buf[index])
+                {
+                    depth_buf[index] = z_interpolated;
+                    set_pixel(Vector3f(i, j, 1.0f), t.getColor());
+                }
+            }
+#else
+            int k = 0;
+            bool fresh = false;
+            for(float m = 0.25f; m < 1.0f; m += 0.5f)
+            {
+                for(float n = 0.25f; n < 1.0f; n += 0.5f)
+                {
+                    if(insideTriangle(i + m, j + n, t.v))
+                    {
+                        auto[alpha, beta, gamma] = computeBarycentric2D(i + m, j + n, t.v);
+                        float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                        float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                        z_interpolated *= w_reciprocal;
+                        if(z_interpolated < depth_buf_s[k][index])
+                        {
+                            depth_buf_s[k][index] = z_interpolated;
+                            frame_buf_s[k][index] = t.getColor();
+                            fresh = true;
+                        }
+                    }
+                    k++;
+                }
+            }
+            if(fresh)
+                set_pixel(Vector3f(i, j, 1.0f), (frame_buf_s[0][index] + frame_buf_s[1][index] + frame_buf_s[2][index] + frame_buf_s[3][index]) / 4.0f);
+#endif
+        }
+    }
     // TODO : Find out the bounding box of current triangle.
     // iterate through the pixel and find if the current pixel is inside the triangle
 
@@ -142,6 +237,12 @@ void rst::rasterizer::clear(rst::Buffers buff)
     if ((buff & rst::Buffers::Depth) == rst::Buffers::Depth)
     {
         std::fill(depth_buf.begin(), depth_buf.end(), std::numeric_limits<float>::infinity());
+#ifdef SS
+    for(auto& fbs: frame_buf_s)
+        std::fill(fbs.begin(), fbs.end(), Eigen::Vector3f{0, 0, 0});
+    for(auto& dbs: depth_buf_s)
+        std::fill(dbs.begin(), dbs.end(), std::numeric_limits<float>::infinity());
+#endif
     }
 }
 
@@ -149,6 +250,13 @@ rst::rasterizer::rasterizer(int w, int h) : width(w), height(h)
 {
     frame_buf.resize(w * h);
     depth_buf.resize(w * h);
+
+#ifdef SS
+    for(auto& dbs: depth_buf_s)
+        dbs.resize(w * h);
+    for(auto& fbs: frame_buf_s)
+        fbs.resize(w * h);
+#endif
 }
 
 int rst::rasterizer::get_index(int x, int y)
