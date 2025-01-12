@@ -18,3 +18,6 @@
 
 ## Assignment5
 ![](pic/5.png)
+
+## Assignment6
+![](pic/6.png)
