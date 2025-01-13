@@ -51,8 +51,7 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
     else {
         Bounds3 centroidBounds;
         for (int i = 0; i < objects.size(); ++i)
-            centroidBounds =
-                Union(centroidBounds, objects[i]->getBounds().Centroid());
+            centroidBounds = Union(centroidBounds, objects[i]->getBounds().Centroid());
         int dim = centroidBounds.maxExtent();
         switch (dim) {
         case 0:
@@ -74,11 +73,53 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
             });
             break;
         }
-
+#if 0
         auto beginning = objects.begin();
         auto middling = objects.begin() + (objects.size() / 2);
         auto ending = objects.end();
+#else
+        int bucket_num = 8;
+        std::vector<Bounds3> buckets(bucket_num);
+        std::vector<int> bucket_count(bucket_num, 0);
 
+        for(auto object: objects)
+        {
+            int index = bucket_num * centroidBounds.Offset(object->getBounds().Centroid())[dim];
+            index = (index == bucket_num ? index - 1 : index);
+            buckets[index] = Union(buckets[index], object->getBounds());
+            bucket_count[index]++;
+        }
+
+        float cost = std::numeric_limits<float>::max();
+        int offset = 0;
+
+        for(int i = 1; i < bucket_num; i++)
+        {
+            Bounds3 b1;
+            Bounds3 b2;
+            int count1 = 0, count2 = 0;
+
+            for(int j = 0; j < i; j++)
+            {
+                b1 = Union(b1, buckets[j]);
+                count1 += bucket_count[j];
+            }
+            for(int k = i; k < bucket_num; k++)
+            {
+                b2 = Union(b2, buckets[k]);
+                count2 += bucket_count[k];
+            }
+            float cost_tmp = (b1.SurfaceArea() * count1 + b2.SurfaceArea() * count2) / bounds.SurfaceArea();
+            if(cost_tmp < cost)
+            {
+                offset = count1;
+                cost = cost_tmp;
+            }
+        }
+        auto beginning = objects.begin();
+        auto middling = objects.begin() + offset;
+        auto ending = objects.end();
+#endif
         auto leftshapes = std::vector<Object*>(beginning, middling);
         auto rightshapes = std::vector<Object*>(middling, ending);
 
