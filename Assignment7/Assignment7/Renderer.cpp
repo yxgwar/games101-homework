@@ -5,6 +5,7 @@
 #include <fstream>
 #include "Scene.hpp"
 #include "Renderer.hpp"
+#include <thread>
 
 
 inline float deg2rad(const float& deg) { return deg * M_PI / 180.0; }
@@ -24,8 +25,9 @@ void Renderer::Render(const Scene& scene)
     int m = 0;
 
     // change the spp value to change sample ammount
-    int spp = 16;
+    int spp = 64;
     std::cout << "SPP: " << spp << "\n";
+#if 0
     for (uint32_t j = 0; j < scene.height; ++j) {
         for (uint32_t i = 0; i < scene.width; ++i) {
             // generate primary ray direction
@@ -41,6 +43,34 @@ void Renderer::Render(const Scene& scene)
         }
         UpdateProgress(j / (float)scene.height);
     }
+#else
+    std::size_t num_threads = std::thread::hardware_concurrency();
+	std::vector<std::thread> threads;
+    int total = scene.width * scene.height;
+    int step = total / num_threads;
+    for (int th = 0; th < num_threads; th++)
+    {
+        threads.emplace_back([&, th]()
+		{
+            int start = th * step;
+            int end = (th == num_threads - 1) ? total : (th + 1) * step;
+            for (int k = start; k < end; k++) {
+                int i = k % scene.width;
+                int j = k / scene.width;
+                float x = (2 * (i + 0.5) / (float)scene.width - 1) *
+                        imageAspectRatio * scale;
+                float y = (1 - 2 * (j + 0.5) / (float)scene.height) * scale;
+
+                Vector3f dir = normalize(Vector3f(-x, y, 1));
+                for (int s = 0; s < spp; s++){
+                    framebuffer[k] += scene.castRay(Ray(eye_pos, dir), 0) / spp;  
+                }
+            }
+        });
+    }
+    for (auto& thread : threads)
+    thread.join();
+#endif
     UpdateProgress(1.f);
 
     // save framebuffer to file
