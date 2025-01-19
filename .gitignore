@@ -35,3 +35,4 @@
 **/build
 /eigen3
 /opencv
+/freetype

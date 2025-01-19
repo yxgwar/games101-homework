@@ -39,6 +39,7 @@ target_link_libraries( ropesim
     ${OPENGL_LIBRARIES}
     ${FREETYPE_LIBRARIES}
     ${CMAKE_THREADS_INIT}
+    ${PROJECT_SOURCE_DIR}/../freetype/lib/libfreetype.a
 )
 
 #-------------------------------------------------------------------------------

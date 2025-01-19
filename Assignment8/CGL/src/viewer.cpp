@@ -1,3 +1,4 @@
+#define GLEW_STATIC
 #include "viewer.h"
 
 #include <stdio.h>

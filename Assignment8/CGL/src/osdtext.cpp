@@ -1,3 +1,4 @@
+#define GLEW_STATIC
 #include "osdtext.h"
 
 #include <iostream>

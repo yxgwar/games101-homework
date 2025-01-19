@@ -143,7 +143,8 @@ endif(WIN32)
 # Required packages
 find_package(OpenGL REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Freetype REQUIRED)
+# find_package(Freetype REQUIRED)
+include_directories(${PROJECT_SOURCE_DIR}/../freetype/include)
 
 # CGL
 if(BUILD_LIBCGL)
